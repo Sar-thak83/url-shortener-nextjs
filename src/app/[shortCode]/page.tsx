@@ -3,14 +3,14 @@ import Link from 'next/link'
 import connectDB from '@/lib/mongodb'
 import Url from '@/models/Url'
 
-interface PageProps {
-  params: { shortCode: string }
-}
+export default async function RedirectPage({ params }: { params: { shortCode: string } }) {
+  // Await the params proxy before reading properties to satisfy Next.js requirement
+  const { shortCode } = await params
 
-export default async function RedirectPage({ params }: PageProps) {
   await connectDB()
 
-  const url = await Url.findOne({ shortCode: params.shortCode })
+  // Use the awaited shortCode here instead of params.shortCode
+  const url = await Url.findOne({ shortCode })
 
   if (!url) {
     return (
@@ -49,5 +49,16 @@ export default async function RedirectPage({ params }: PageProps) {
 
   await Url.findByIdAndUpdate(url._id, { $inc: { clicks: 1 } })
 
-  redirect(url.originalUrl)
+  // Build an absolute redirect target for production:
+  const protocol = process.env.DEFAULT_PROTOCOL || process.env.NEXT_PUBLIC_DEFAULT_PROTOCOL || 'https'
+  const domain =
+    process.env.DEFAULT_DOMAIN ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXTAUTH_URL ||
+    'localhost:3000'
+
+  const normalizedPath = url.originalUrl.startsWith('/') ? url.originalUrl : `/${url.originalUrl}`
+  const target = /^https?:\/\//i.test(url.originalUrl) ? url.originalUrl : `${protocol}://${domain}${normalizedPath}`
+
+  redirect(target)
 }
